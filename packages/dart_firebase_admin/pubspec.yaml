@@ -12,7 +12,7 @@ dependencies:
   collection: ^1.18.0
   dart_jsonwebtoken: ^3.0.0
   freezed_annotation: ^3.0.0
-  googleapis: ^13.2.0
+  googleapis: ^14.0.0
   googleapis_auth: ^2.0.0
   googleapis_beta: ^9.0.0
   http: ^1.0.0
@@ -32,5 +32,5 @@ dev_dependencies:
   uuid: ^4.0.0
 
 false_secrets:
- - /test/auth/jwt_test.dart
- - /test/client/get_id_token.js
+  - /test/auth/jwt_test.dart
+  - /test/client/get_id_token.js

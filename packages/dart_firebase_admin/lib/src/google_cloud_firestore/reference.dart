@@ -9,6 +9,53 @@ final class CollectionReference<T> extends Query<T> {
           queryOptions: _QueryOptions.forCollectionQuery(path, converter),
         );
 
+  /// Returns the count of documents in this collection using an aggregation query.
+  ///
+  /// Example:
+  /// ```dart
+  /// final count = await firestore.collection('col').count();
+  /// print('Number of documents: $count');
+  /// ```
+  Future<int> count() async {
+    // Firestore aggregation query for count
+    final parentPath = _queryOptions.parentPath._toQualifiedResourcePath(
+      firestore.app.projectId,
+      firestore._databaseId,
+    );
+
+    final response = await firestore._client.v1((client) async {
+      // The aggregation query API is available as runAggregationQuery
+      // See: https://cloud.google.com/firestore/docs/reference/rest/v1/projects.databases.documents/runAggregationQuery
+      final aggregationQuery = firestore1.RunAggregationQueryRequest(
+        structuredAggregationQuery: firestore1.StructuredAggregationQuery(
+          structuredQuery: _toStructuredQuery(),
+          aggregations: [
+            firestore1.Aggregation(
+              count: firestore1.Count(),
+              alias: 'count',
+            ),
+          ],
+        ),
+      );
+      return client.projects.databases.documents.runAggregationQuery(
+        aggregationQuery,
+        parentPath._formattedName,
+      );
+    });
+
+    // The response is a stream of aggregation results, but for count, only one result is expected.
+    for (final result in response) {
+      final aggregateFields = result.result?.aggregateFields;
+      if (aggregateFields != null && aggregateFields.containsKey('count')) {
+        final countValue = aggregateFields['count'];
+        if (countValue != null && countValue.integerValue != null) {
+          return int.parse(countValue.integerValue!);
+        }
+      }
+    }
+    return 0;
+  }
+
   _ResourcePath get _resourcePath => _queryOptions.parentPath._append(id);
 
   /// The last path element of the referenced collection.
@@ -60,8 +107,7 @@ final class CollectionReference<T> extends Query<T> {
       );
     }
 
-    if (!identical(_queryOptions.converter, _jsonConverter) &&
-        path.parent() != _resourcePath) {
+    if (!identical(_queryOptions.converter, _jsonConverter) && path.parent() != _resourcePath) {
       throw ArgumentError.value(
         documentPath,
         'documentPath',
@@ -104,8 +150,7 @@ final class CollectionReference<T> extends Query<T> {
     });
 
     return [
-      for (final document
-          in response.documents ?? const <firestore1.Document>[])
+      for (final document in response.documents ?? const <firestore1.Document>[])
         doc(
           // ignore: unnecessary_null_checks, we don't want to inadvertently obtain a new document
           _QualifiedResourcePath.fromSlashSeparatedString(document.name!).id!,
@@ -288,8 +333,7 @@ final class DocumentReference<T> implements _Serializable {
   /// A delete for a non-existing document is treated as a success (unless
   /// [precondition] is specified).
   Future<WriteResult> delete([Precondition? precondition]) async {
-    final writeBatch = WriteBatch._(this.firestore)
-      ..delete(this, precondition: precondition);
+    final writeBatch = WriteBatch._(this.firestore)..delete(this, precondition: precondition);
 
     final results = await writeBatch.commit();
     return results.single;
@@ -322,8 +366,7 @@ final class DocumentReference<T> implements _Serializable {
       ..update(
         this,
         {
-          for (final entry in data.entries)
-            FieldPath.from(entry.key): entry.value,
+          for (final entry in data.entries) FieldPath.from(entry.key): entry.value,
         },
         precondition: precondition,
       );
@@ -422,8 +465,7 @@ bool _valueEqual(firestore1.Value a, firestore1.Value b) {
         return false;
       }
 
-      for (final MapEntry(:key, :value) in mapValue.fields?.entries ??
-          const <MapEntry<String, firestore1.Value>>[]) {
+      for (final MapEntry(:key, :value) in mapValue.fields?.entries ?? const <MapEntry<String, firestore1.Value>>[]) {
         final bValue = bMap.fields?[key];
         if (bValue == null) return false;
         if (!_valueEqual(value, bValue)) return false;
@@ -502,9 +544,7 @@ class _FieldOrder {
 
   @override
   bool operator ==(Object other) {
-    return other is _FieldOrder &&
-        fieldPath == other.fieldPath &&
-        direction == other.direction;
+    return other is _FieldOrder && fieldPath == other.fieldPath && direction == other.direction;
   }
 
   @override
@@ -631,9 +671,7 @@ class _CompositeFilterInternal implements _FilterInternal {
 
   @override
   FieldPath? get firstInequalityField {
-    return flattenedFilters
-        .firstWhereOrNull((filter) => filter.isInequalityFilter)
-        ?.field;
+    return flattenedFilters.firstWhereOrNull((filter) => filter.isInequalityFilter)?.field;
   }
 
   @override
@@ -727,10 +765,7 @@ class _FieldFilterInternal implements _FilterInternal {
 
   @override
   bool operator ==(Object other) {
-    return other is _FieldFilterInternal &&
-        field == other.field &&
-        op == other.op &&
-        value == other.value;
+    return other is _FieldFilterInternal && field == other.field && op == other.op && value == other.value;
   }
 
   @override
@@ -826,8 +861,7 @@ base class Query<T> {
     for (var i = 0; i < fieldValues.length; ++i) {
       final fieldValue = fieldValues[i];
 
-      if (fieldOrders[i].fieldPath == FieldPath.documentId &&
-          fieldValue is! DocumentReference) {
+      if (fieldOrders[i].fieldPath == FieldPath.documentId && fieldValue is! DocumentReference) {
         throw ArgumentError(
           'When ordering with FieldPath.documentId(), '
           'the cursor must be a DocumentReference.',
@@ -891,9 +925,7 @@ base class Query<T> {
     );
     if (!hasDocumentId) {
       // Add implicit sorting by name, using the last specified direction.
-      final lastDirection = fieldOrders.isEmpty
-          ? _Direction.ascending
-          : fieldOrders.last.direction;
+      final lastDirection = fieldOrders.isEmpty ? _Direction.ascending : fieldOrders.last.direction;
 
       fieldOrders.add(
         _FieldOrder(fieldPath: FieldPath.documentId, direction: lastDirection),
@@ -1219,11 +1251,8 @@ base class Query<T> {
 
       structuredQuery.orderBy = _queryOptions.fieldOrders.map((order) {
         // Flip the orderBy directions since we want the last results
-        final dir = order.direction == _Direction.descending
-            ? _Direction.ascending
-            : _Direction.descending;
-        return _FieldOrder(fieldPath: order.fieldPath, direction: dir)
-            ._toProto();
+        final dir = order.direction == _Direction.descending ? _Direction.ascending : _Direction.descending;
+        return _FieldOrder(fieldPath: order.fieldPath, direction: dir)._toProto();
       }).toList();
 
       // Swap the cursors to match the now-flipped query ordering.
@@ -1281,8 +1310,7 @@ base class Query<T> {
     }
 
     if (this._queryOptions.hasFieldOrders) {
-      structuredQuery.orderBy =
-          _queryOptions.fieldOrders.map((o) => o._toProto()).toList();
+      structuredQuery.orderBy = _queryOptions.fieldOrders.map((o) => o._toProto()).toList();
     }
 
     structuredQuery.startAt = _toCursor(_queryOptions.startAt);
@@ -1454,10 +1482,8 @@ base class Query<T> {
   }
 
   _FilterInternal _parseCompositeFilter(_CompositeFilter compositeFilterData) {
-    final parsedFilters = compositeFilterData.filters
-        .map(_parseFilter)
-        .where((filter) => filter.filters.isNotEmpty)
-        .toList();
+    final parsedFilters =
+        compositeFilterData.filters.map(_parseFilter).where((filter) => filter.filters.isNotEmpty).toList();
 
     // For composite filters containing 1 filter, return the only filter.
     // For example: AND(FieldFilter1) == FieldFilter1
@@ -1466,9 +1492,7 @@ base class Query<T> {
     }
     return _CompositeFilterInternal(
       filters: parsedFilters,
-      op: compositeFilterData.operator == _CompositeOperator.and
-          ? _CompositeOperator.and
-          : _CompositeOperator.or,
+      op: compositeFilterData.operator == _CompositeOperator.and ? _CompositeOperator.and : _CompositeOperator.or,
     );
   }
 
@@ -1502,15 +1526,12 @@ base class Query<T> {
           fieldPath: FieldPath.documentId._formattedName,
         )
       else
-        for (final fieldPath in fieldPaths)
-          firestore1.FieldReference(fieldPath: fieldPath._formattedName),
+        for (final fieldPath in fieldPaths) firestore1.FieldReference(fieldPath: fieldPath._formattedName),
     ];
 
     return Query<DocumentData>._(
       firestore: firestore,
-      queryOptions: _queryOptions
-          .copyWith(projection: firestore1.Projection(fields: fields))
-          .withConverter(
+      queryOptions: _queryOptions.copyWith(projection: firestore1.Projection(fields: fields)).withConverter(
             // By specifying a field mask, the query result no longer conforms to type
             // `T`. We there return `Query<DocumentData>`.
             _jsonConverter,
@@ -1673,9 +1694,7 @@ base class Query<T> {
   @mustBeOverridden
   @override
   bool operator ==(Object other) {
-    return other is Query<T> &&
-        runtimeType == other.runtimeType &&
-        _queryOptions == other._queryOptions;
+    return other is Query<T> && runtimeType == other.runtimeType && _queryOptions == other._queryOptions;
   }
 
   @override
@@ -1722,10 +1741,8 @@ class QuerySnapshot<T> {
     return other is QuerySnapshot<T> &&
         runtimeType == other.runtimeType &&
         query == other.query &&
-        const ListEquality<QueryDocumentSnapshot<Object?>>()
-            .equals(docs, other.docs) &&
-        const ListEquality<DocumentChange<Object?>>()
-            .equals(docChanges, other.docChanges);
+        const ListEquality<QueryDocumentSnapshot<Object?>>().equals(docs, other.docs) &&
+        const ListEquality<DocumentChange<Object?>>().equals(docChanges, other.docChanges);
   }
 
   @override

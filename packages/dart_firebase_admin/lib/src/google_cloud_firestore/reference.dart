@@ -9,53 +9,6 @@ final class CollectionReference<T> extends Query<T> {
           queryOptions: _QueryOptions.forCollectionQuery(path, converter),
         );
 
-  /// Returns the count of documents in this collection using an aggregation query.
-  ///
-  /// Example:
-  /// ```dart
-  /// final count = await firestore.collection('col').count();
-  /// print('Number of documents: $count');
-  /// ```
-  Future<int> count() async {
-    // Firestore aggregation query for count
-    final parentPath = _queryOptions.parentPath._toQualifiedResourcePath(
-      firestore.app.projectId,
-      firestore._databaseId,
-    );
-
-    final response = await firestore._client.v1((client) async {
-      // The aggregation query API is available as runAggregationQuery
-      // See: https://cloud.google.com/firestore/docs/reference/rest/v1/projects.databases.documents/runAggregationQuery
-      final aggregationQuery = firestore1.RunAggregationQueryRequest(
-        structuredAggregationQuery: firestore1.StructuredAggregationQuery(
-          structuredQuery: _toStructuredQuery(),
-          aggregations: [
-            firestore1.Aggregation(
-              count: firestore1.Count(),
-              alias: 'count',
-            ),
-          ],
-        ),
-      );
-      return client.projects.databases.documents.runAggregationQuery(
-        aggregationQuery,
-        parentPath._formattedName,
-      );
-    });
-
-    // The response is a stream of aggregation results, but for count, only one result is expected.
-    for (final result in response) {
-      final aggregateFields = result.result?.aggregateFields;
-      if (aggregateFields != null && aggregateFields.containsKey('count')) {
-        final countValue = aggregateFields['count'];
-        if (countValue != null && countValue.integerValue != null) {
-          return int.parse(countValue.integerValue!);
-        }
-      }
-    }
-    return 0;
-  }
-
   _ResourcePath get _resourcePath => _queryOptions.parentPath._append(id);
 
   /// The last path element of the referenced collection.
@@ -778,6 +731,49 @@ base class Query<T> {
     required this.firestore,
     required _QueryOptions<T> queryOptions,
   }) : _queryOptions = queryOptions;
+
+  /// Returns the count of documents matching this query using an aggregation query.
+  ///
+  /// Example:
+  /// ```dart
+  /// final count = await firestore.collection('col').where('foo', WhereFilter.equal, 'bar').count();
+  /// print('Number of documents: $count');
+  /// ```
+  Future<int> count() async {
+    final parentPath = _queryOptions.parentPath._toQualifiedResourcePath(
+      firestore.app.projectId,
+      firestore._databaseId,
+    );
+
+    final response = await firestore._client.v1((client) async {
+      final aggregationQuery = firestore1.RunAggregationQueryRequest(
+        structuredAggregationQuery: firestore1.StructuredAggregationQuery(
+          structuredQuery: _toStructuredQuery(),
+          aggregations: [
+            firestore1.Aggregation(
+              count: firestore1.Count(),
+              alias: 'count',
+            ),
+          ],
+        ),
+      );
+      return client.projects.databases.documents.runAggregationQuery(
+        aggregationQuery,
+        parentPath._formattedName,
+      );
+    });
+
+    for (final result in response) {
+      final aggregateFields = result.result?.aggregateFields;
+      if (aggregateFields != null && aggregateFields.containsKey('count')) {
+        final countValue = aggregateFields['count'];
+        if (countValue != null && countValue.integerValue != null) {
+          return int.parse(countValue.integerValue!);
+        }
+      }
+    }
+    return 0;
+  }
 
   static List<Object?> _extractFieldValues(
     DocumentSnapshot<Object?> documentSnapshot,
